@@ -42,11 +42,11 @@ interface FormValues {
 
 const NewComponentType = ({ onComplete }: { onComplete: () => void }): JSX.Element => {
     const form = useForm<FormValues>({ defaultValues: { fields: [] } });
-    const { config, refetch } = useContext(MainContext);
+    const { config, refetchConfig } = useContext(MainContext);
     const writeConfig = trpc.writeConfig.useMutation({
         onSuccess: () => {
             notify.success(`Component type ${form.getValues('fieldName')} successfully created.`);
-            refetch();
+            refetchConfig();
             onComplete();
         },
     });
@@ -63,7 +63,7 @@ const NewComponentType = ({ onComplete }: { onComplete: () => void }): JSX.Eleme
                                 return notify.error('A component type is required.');
                             if (!v.fields || fields.length === 0)
                                 return notify.error('Fields are required.');
-                            writeConfig.mutate({
+                            return writeConfig.mutate({
                                 config: {
                                     componentTypes: {
                                         ...config.componentTypes,
@@ -74,7 +74,6 @@ const NewComponentType = ({ onComplete }: { onComplete: () => void }): JSX.Eleme
                                     },
                                 },
                             });
-                            console.log(v);
                         })}
                     >
                         <div className={'col max-w-96 py-10  gap-6'}>
@@ -190,7 +189,7 @@ const NewComponentType = ({ onComplete }: { onComplete: () => void }): JSX.Eleme
                                                 return notify.error('A field name is required');
                                             if (!values.type)
                                                 return notify.error('A field type is required');
-                                            form.setValue('fields', [
+                                            return form.setValue('fields', [
                                                 ...values.fields,
                                                 { fieldName: values.fieldName, type: values.type },
                                             ]);

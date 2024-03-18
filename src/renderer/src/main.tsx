@@ -2,7 +2,6 @@ import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import '@fontsource/inter/700.css';
-import { TConfig } from 'src/config';
 import ReactDOM from 'react-dom/client';
 import { ipcLink } from 'electron-trpc/renderer';
 import React, { ReactNode, useState } from 'react';
