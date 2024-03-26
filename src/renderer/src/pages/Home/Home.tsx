@@ -1,8 +1,13 @@
 import { TConfig } from 'src/config';
+import { trpc } from '@/renderer/main';
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import {
     Card,
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
     Table,
     TableBody,
     TableCell,
@@ -19,7 +24,8 @@ import { keys } from '../../../../utils';
 import { MainContext } from '../../Context';
 
 const Home = (): JSX.Element => {
-    const { config, data } = useContext(MainContext);
+    const { config, data, refetchData } = useContext(MainContext);
+    const deleteRow = trpc.deleteRow.useMutation({ onSuccess: () => refetchData() });
     const [selectedTab, setSelectedTab] = useState<keyof TConfig['componentTypes'] | undefined>(
         undefined,
     );
@@ -43,8 +49,6 @@ const Home = (): JSX.Element => {
         if (selectedTab !== undefined) return;
         setSelectedTab(keys(config.componentTypes)[0]);
     }, [config]);
-
-    console.log(table.getRowModel().rows?.length);
 
     return (
         <div className={'col py-12 px-10 gap-4 grow'}>
@@ -82,20 +86,34 @@ const Home = (): JSX.Element => {
                     </TableHeader>
                     <TableBody>
                         {table.getRowModel().rows?.length ? (
-                            table.getRowModel().rows.map(row => (
-                                <TableRow
-                                    key={row.id}
-                                    data-state={row.getIsSelected() && 'selected'}
-                                >
-                                    {row.getVisibleCells().map(cell => (
-                                        <TableCell key={cell.id}>
-                                            {flexRender(
-                                                cell.column.columnDef.cell,
-                                                cell.getContext(),
-                                            )}
-                                        </TableCell>
-                                    ))}
-                                </TableRow>
+                            table.getRowModel().rows.map((row, index) => (
+                                <ContextMenu key={row.id}>
+                                    <ContextMenuTrigger asChild>
+                                        <TableRow data-state={row.getIsSelected() && 'selected'}>
+                                            {row.getVisibleCells().map(cell => (
+                                                <TableCell key={cell.id}>
+                                                    {flexRender(
+                                                        cell.column.columnDef.cell,
+                                                        cell.getContext(),
+                                                    )}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    </ContextMenuTrigger>
+                                    <ContextMenuContent>
+                                        <ContextMenuItem
+                                            onClick={() => {
+                                                if (!selectedTab) return;
+                                                deleteRow.mutate({
+                                                    componentName: selectedTab,
+                                                    rowNumber: index,
+                                                });
+                                            }}
+                                        >
+                                            Delete item
+                                        </ContextMenuItem>
+                                    </ContextMenuContent>
+                                </ContextMenu>
                             ))
                         ) : (
                             <TableRow>

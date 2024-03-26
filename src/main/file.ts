@@ -2,7 +2,11 @@ import path from 'path';
 import { app } from 'electron';
 import { existsSync, mkdirSync, promises } from 'fs';
 
-const read = async (path: string, validator: (file: string) => object | false) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const read = async <T extends object | []>(
+    path: string,
+    validator: (file: string) => T | false,
+): Promise<T | false> => {
     return await promises
         .readFile(path, 'utf8')
         .then(file => {
@@ -36,7 +40,8 @@ export const file = (fileName: string, folder?: string) => {
     }
 
     return {
-        read: (validator: (file: string) => object | false) => read(filePath, validator),
+        read: <T extends object | []>(validator: (file: string) => T | false) =>
+            read<T>(filePath, validator),
         write: (contents: string) => write(filePath, contents),
         append: (contents: string) => append(filePath, contents),
     };

@@ -13,3 +13,4 @@ export * from './DatePicker';
 export * from './Table';
 export * from './Seperator';
 export * from './Notification';
+export * from './ContextMenu';

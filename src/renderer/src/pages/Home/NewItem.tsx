@@ -75,7 +75,6 @@ const NewItem = (): JSX.Element => {
                         onSubmit={form.handleSubmit(v => {
                             if (v.fields.some(f => f.value === undefined))
                                 return notify.error('All fields muse be complete.');
-                            console.log(v.fields);
                             const parsedFields = dataRow.safeParse(v.fields);
                             if (!parsedFields.success) return notify.error('Something went wrong');
                             return addItem.mutate({
@@ -105,7 +104,6 @@ const NewItem = (): JSX.Element => {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectGroup>
-                                                    {/* <SelectLabel>Component Types</SelectLabel> */}
                                                     {keys(config.componentTypes).map(type => (
                                                         <SelectItem
                                                             className={'cursor-pointer'}

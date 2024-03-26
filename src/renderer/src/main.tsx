@@ -25,8 +25,6 @@ const TRPCWrapper = ({ children }: { children: ReactNode }): JSX.Element => {
         }),
     );
 
-    console.log('renderTRPC');
-
     return (
         <trpc.Provider client={trpcClient} queryClient={queryClient}>
             <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -43,7 +41,6 @@ const Main = () => {
         cacheTime: Infinity,
         staleTime: Infinity,
     });
-    // console.log('renderMain');
 
     return (
         <MainContext.Provider

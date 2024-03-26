@@ -28,9 +28,13 @@ export const dataRow = z.array(
     ),
 );
 
+export type TComponentField = z.infer<typeof componentField>;
+
 export type TConfig = z.infer<typeof configShape>;
 
 export type FieldDef = ArrElement<TConfig['componentTypes'][keyof TConfig['componentTypes']]>;
+
+export type TComponentType = { name: string; fields: TComponentField[] };
 
 export type FieldValue<I extends FieldDef> = Omit<I, 'type'> &
     (

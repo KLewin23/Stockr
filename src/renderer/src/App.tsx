@@ -9,7 +9,6 @@ export type Page = 'Home' | 'Components';
 
 const App = (): JSX.Element => {
     const [page, setPage] = useState<Page>('Home');
-    // console.log('render');
 
     return (
         <div className={'col bg-background min-h-full text-foreground'}>

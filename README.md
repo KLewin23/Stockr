@@ -32,3 +32,10 @@ $ pnpm build:mac
 # For Linux
 $ pnpm build:linux
 ```
+
+### Release
+
+- Update package.json version
+- Add and commit changes
+- Tag the commit with the same version `git tag v*.*.*`
+- Push the commit and tags `git push | git push --tags` <- windows
