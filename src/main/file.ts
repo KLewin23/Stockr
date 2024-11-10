@@ -5,15 +5,9 @@ import { existsSync, mkdirSync, promises } from 'fs';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const read = async <T extends object | []>(
     path: string,
-    validator: (file: string) => T | false,
-): Promise<T | false> => {
-    return await promises
-        .readFile(path, 'utf8')
-        .then(file => {
-            const validFile = validator(file);
-            return !validFile ? false : validFile;
-        })
-        .catch(() => false);
+    validator: (file: string) => T | Error,
+): Promise<T | Error> => {
+    return await promises.readFile(path, 'utf8').then(file => validator(file));
 };
 
 const write = async (path: string, contents: string) => {
@@ -30,6 +24,20 @@ const append = async (path: string, content: string) => {
         .catch(() => false);
 };
 
+const exists = async (fileName: string) => {
+    return await promises
+        .access(fileName)
+        .then(() => true)
+        .catch(() => false);
+};
+
+const destroy = async (fileName: string) => {
+    return await promises
+        .rm(fileName)
+        .then(() => true)
+        .catch(() => false);
+};
+
 export const file = (fileName: string, folder?: string) => {
     const userData = app.getPath('userData');
     const filePath = folder ? path.join(userData, folder, fileName) : path.join(userData, fileName);
@@ -40,9 +48,11 @@ export const file = (fileName: string, folder?: string) => {
     }
 
     return {
-        read: <T extends object | []>(validator: (file: string) => T | false) =>
+        read: <T extends object | []>(validator: (file: string) => T | Error) =>
             read<T>(filePath, validator),
         write: (contents: string) => write(filePath, contents),
         append: (contents: string) => append(filePath, contents),
+        exists:() => exists(filePath),
+        destroy:() => destroy(filePath)
     };
 };

@@ -15,11 +15,12 @@ function createWindow(): BrowserWindow {
         height: 1080,
         show: false,
         autoHideMenuBar: true,
-        ...(process.platform === 'linux' ? { icon } : {}),
+        icon,
         webPreferences: {
             preload: join(__dirname, '../preload/index.js'),
             sandbox: false,
         },
+        titleBarStyle: 'hidden'
     });
 
     mainWindow.on('ready-to-show', () => {
@@ -57,12 +58,12 @@ app.whenReady().then(async () => {
 
     const readOrSetupConfig = async (): Promise<TConfig> => {
         const config = file('config.json');
-        const readConfig = (await config.read(file => {
+        const readConfig = await config.read(file => {
             const parsedFile = configShape.safeParse(JSON.parse(file));
-            if (parsedFile.success === false) return false;
+            if (parsedFile.success === false) return Error('Error parsing stockr config.');
             return parsedFile.data;
-        })) as TConfig | false;
-        if (readConfig === false) {
+        });
+        if (readConfig instanceof Error) {
             config.write(JSON.stringify({ componentTypes: {} }));
             return { componentTypes: {} };
         }
@@ -79,7 +80,7 @@ app.whenReady().then(async () => {
         },
     });
 
-    window.webContents.openDevTools();
+    // window.webContents.openDevTools();
 
     app.on('activate', function () {
         // On macOS it's common to re-create a window in the app when the
@@ -96,7 +97,6 @@ app.on('window-all-closed', () => {
         app.quit();
     }
 });
-
 // In this file you can include the rest of your app"s specific main process
 // code. You can also put them in separate files and require them here.
 

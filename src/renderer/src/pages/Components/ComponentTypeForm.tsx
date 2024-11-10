@@ -28,6 +28,8 @@ import {
     notify,
 } from '@/shadcn';
 
+import ConfirmComponentDelete from './ConfirmComponentDelete';
+
 type Fields = {
     fieldName: string;
     type: 'string' | 'number' | 'boolean' | 'date';
@@ -40,20 +42,28 @@ interface FormValues {
     fields: Fields;
 }
 
+type Mode =
+    | {
+          mode: 'create';
+      }
+    | {
+          mode: 'edit';
+          onDelete: () => void;
+      };
+
 const ComponentTypeForm = ({
-    mode,
     onSubmit,
     onCancel,
     defaultValues,
+    ...props
 }: {
-    mode: 'edit' | 'create';
     onSubmit: (values: FormValues) => void;
     onCancel: () => void;
     defaultValues?: {
         componentName: string;
         fields: Fields;
     };
-}): JSX.Element => {
+} & Mode): JSX.Element => {
     const form = useForm<FormValues>({
         defaultValues: defaultValues
             ? { componentName: defaultValues.componentName, fields: defaultValues.fields }
@@ -199,23 +209,28 @@ const ComponentTypeForm = ({
                                 </div>
                             </div>
                         </div>
-                        <div className={'flex justify-end items-center gap-4'}>
-                            {keys(form.formState.dirtyFields).length > 2 ? (
-                                <p className={'italic text-accent-foreground/30'}>
-                                    Unsaved changes..
-                                </p>
+                        <div className={'flex justify-between'}>
+                            {props.mode === 'edit' ? (
+                                <ConfirmComponentDelete onDelete={() => props.onDelete()} />
                             ) : null}
-                            <Button className={'w-[150px]'}>
-                                {mode === 'edit' ? 'Update' : 'Create'} Type
-                            </Button>
-                            <Button
-                                className={'w-[100px]'}
-                                variant={'destructive'}
-                                type={'button'}
-                                onClick={onCancel}
-                            >
-                                Cancel
-                            </Button>
+                            <div className={'flex justify-end items-center gap-4'}>
+                                {keys(form.formState.dirtyFields).length > 2 ? (
+                                    <p className={'italic text-accent-foreground/30'}>
+                                        Unsaved changes..
+                                    </p>
+                                ) : null}
+                                <Button className={'w-[150px]'}>
+                                    {props.mode === 'edit' ? 'Update' : 'Create'} Type
+                                </Button>
+                                <Button
+                                    className={'w-[100px]'}
+                                    variant={'destructive'}
+                                    type={'button'}
+                                    onClick={onCancel}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
                         </div>
                     </form>
                 </Form>

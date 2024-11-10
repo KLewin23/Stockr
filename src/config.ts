@@ -16,19 +16,23 @@ export const configShape = z.object({
     componentTypes: z.record(z.string(), z.array(componentField)),
 });
 
-export const dataRow = z.array(
-    z.intersection(
-        z.object({ name: z.string() }),
-        z.union([
-            z.object({ type: z.literal('string'), value: z.string() }),
-            z.object({ type: z.literal('number'), value: z.number() }),
-            z.object({ type: z.literal('date'), value: z.date() }),
-            z.object({ type: z.literal('boolean'), value: z.boolean() }),
-        ]),
-    ),
+const columnShape = z.intersection(
+    z.object({ name: z.string() }),
+    z.union([
+        z.object({ type: z.literal('string'), value: z.string() }),
+        z.object({ type: z.literal('number'), value: z.number() }),
+        z.object({ type: z.literal('date'), value: z.date() }),
+        z.object({ type: z.literal('boolean'), value: z.boolean() }),
+    ]),
 );
 
+export const dataRow = z.array(columnShape);
+
 export type TComponentField = z.infer<typeof componentField>;
+
+export type TValueMap = Map<string, string | number | Date | boolean>;
+
+export type TAcceptedTypes = TComponentField['type'];
 
 export type TConfig = z.infer<typeof configShape>;
 

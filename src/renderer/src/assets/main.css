@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+#titlebar {
+  -webkit-app-region: drag;
+  -webkit-user-select: none;
+}
+
+#titlebar button { 
+  -webkit-app-region: no-drag;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

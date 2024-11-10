@@ -7,7 +7,7 @@ import ComponentTypeForm from './ComponentTypeForm';
 
 const NewComponentType = ({ onComplete }: { onComplete: () => void }): JSX.Element => {
     const { config, refetchConfig } = useContext(MainContext);
-    const writeConfig = trpc.writeConfig.useMutation({
+    const setupComponent = trpc.setupComponent.useMutation({
         onSuccess: () => {
             notify.success(`Component type successfully created.`);
             refetchConfig();
@@ -19,7 +19,8 @@ const NewComponentType = ({ onComplete }: { onComplete: () => void }): JSX.Eleme
         <ComponentTypeForm
             mode={'create'}
             onSubmit={v =>
-                writeConfig.mutate({
+                setupComponent.mutate({
+                    componentName: v.componentName,
                     config: {
                         componentTypes: {
                             ...config.componentTypes,
@@ -29,6 +30,12 @@ const NewComponentType = ({ onComplete }: { onComplete: () => void }): JSX.Eleme
                             })),
                         },
                     },
+                    header: v.fields.reduce((acc, field, index) => {
+                        const heading = field.fieldName.includes(',')
+                            ? `"${field.fieldName}"`
+                            : field.fieldName;
+                        return index === 0 ? heading : `${acc},${heading}`;
+                    }, ''),
                 })
             }
             onCancel={onComplete}

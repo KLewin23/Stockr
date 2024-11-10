@@ -13,13 +13,24 @@ const EditComponentType = ({
     component: TComponentType;
     onComplete: () => void;
 }): JSX.Element => {
-    const { config, refetchConfig } = useContext(MainContext);
+    const { config, refetchConfig, refetchData } = useContext(MainContext);
     const updateConfig = trpc.updateConfig.useMutation({
         onSuccess: () => {
             notify.success(`Component type successfully created.`);
             refetchConfig();
+            refetchData();
             onComplete();
         },
+        onError: e => notify.error(e.message),
+    });
+    const deleteComponentType = trpc.deleteComponent.useMutation({
+        onSuccess: () => {
+            notify.success(`Component type successfully deleted.`);
+            refetchConfig();
+            refetchData();
+            onComplete();
+        },
+        onError: e => notify.error(e.message),
     });
 
     return (
@@ -46,6 +57,7 @@ const EditComponentType = ({
                     modifiedType: component.name,
                 })
             }
+            onDelete={() => deleteComponentType.mutate({ componentName: component.name })}
             onCancel={onComplete}
         />
     );

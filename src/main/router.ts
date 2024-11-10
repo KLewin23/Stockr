@@ -6,8 +6,9 @@ import { BrowserWindow, app } from 'electron';
 import { TRPCError, initTRPC } from '@trpc/server';
 
 import { file } from './file';
-import { ArrElement } from '../utils';
-import { TConfig, configShape, dataRow } from '../config';
+import { getErrorFromArray, keys } from '../utils';
+import { parseCsv, renderColumnAsCsv, splitCsvRow } from './csv';
+import { TConfig, TValueMap, configShape, dataRow } from '../config';
 
 type Context = {
     window: BrowserWindow;
@@ -16,53 +17,51 @@ type Context = {
 
 const t = initTRPC.context<Context>().create({ isServer: true });
 
-const renderRowAsCsv = (row: ArrElement<z.infer<typeof dataRow>>): string => {
-    if ((row.type === 'string' && row.value.includes(',')) || row.type === 'date')
-        return `"${row.value}"`;
-    return row.value.toString();
-};
-
-const splitCsvRow = (row: string) =>
-    row.match(
-        /(?<=")[^"]+?(?="(?:\s*?,|\s*?$))|(?<=(?:^|,)\s*?)(?:[^,"\s][^,"]*[^,"\s])|(?:[^,"\s])(?![^"]*?"(?:\s*?,|\s*?$))(?=\s*?(?:,|$))/g,
-    );
-
 const { procedure } = t;
 
-const parseCsv = (file: string) => {
-    const lines = file.split('\n');
-    const header = splitCsvRow(lines[0]);
-    return lines.slice(1, -1).map(row => {
-        const cols = splitCsvRow(row);
-        return (cols ?? []).reduce(
-            (acc, col, index) => ({ ...acc, [(header ?? [])[index]]: col }),
-            {},
-        );
-    });
-};
+// TODO make config and filenames lowercase
+
+const dataRowAsString = (row: z.infer<typeof dataRow>) =>
+    row.reduce(
+        (acc, item, index) => `${acc}${index === 0 ? '' : ','}${renderColumnAsCsv(item)}`,
+        '',
+    );
 
 export const router = t.router({
-    readData: procedure.query(async () => {
+    readData: procedure.query(async ({ ctx }) => {
         const dataFolder = path.join(app.getPath('userData'), 'data');
         const dataFolderContents = await readdir(dataFolder);
-        const promises = dataFolderContents.map(async fileName => [
+
+        const promises = dataFolderContents.map(async fileName => ({
             fileName,
-            await file(fileName, 'data').read<object[]>(parseCsv),
-        ]);
+            contents: await file(fileName, 'data').read<TValueMap[]>(file =>
+                parseCsv(file, ctx.config.componentTypes[fileName.slice(0, -4)]),
+            ),
+        }));
 
         return await Promise.all(promises)
             .then(r => {
-                return r.reduce(
-                    (acc, [fileName, contents]) =>
-                        typeof fileName !== 'string'
-                            ? acc
-                            : { ...acc, [fileName.replace('.csv', '')]: contents },
-                    {},
+                const parsedFiles = r.reduce<Map<string, Error | TValueMap[]>>(
+                    (map, { fileName, contents }) =>
+                        map.set(fileName.replace('.csv', ''), contents),
+                    new Map(),
                 );
+                const error = getErrorFromArray([...parsedFiles.values()]);
+                if (error instanceof Error)
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: error.message ?? 'Default error when parsing data file.',
+                    });
+                return parsedFiles as Map<string, TValueMap[]>;
             })
-            .catch(reason => console.log(reason, 'r'));
+            .catch(e => {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: e.message ?? 'Error caught parsing data file.',
+                });
+            });
     }),
-    writeData: procedure
+    addData: procedure
         .input(z.object({ componentName: z.string(), rowValues: dataRow }))
         .mutation(async ({ input }) => {
             const filePath = path.join(
@@ -71,10 +70,8 @@ export const router = t.router({
                 `${input.componentName}.csv`,
             );
             const fileRef = file(`${input.componentName}.csv`, 'data');
-            const rowAsString = input.rowValues.reduce(
-                (acc, item, index) => `${acc}${index === 0 ? '' : ','}${renderRowAsCsv(item)}`,
-                '',
-            );
+            console.log(input.rowValues);
+            const rowAsString = dataRowAsString(input.rowValues);
             if (!existsSync(filePath)) {
                 const headerString = input.rowValues.reduce(
                     (acc, item, index) =>
@@ -85,17 +82,45 @@ export const router = t.router({
                     headerString.concat('\n').concat(rowAsString).concat('\n'),
                 );
             }
-            return await fileRef.append(rowAsString.concat('\n'));
+            return await fileRef.append(`\n${rowAsString}`);
+        }),
+    updateData: procedure
+        .input(z.object({ componentName: z.string(), rowValues: dataRow, index: z.number() }))
+        .mutation(async ({ input }) => {
+            const filePath = path.join(
+                app.getPath('userData'),
+                'data',
+                `${input.componentName}.csv`,
+            );
+            if (!existsSync(filePath))
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: `Data file for ${input.componentName} not found.`,
+                });
+            const fileRef = file(`${input.componentName}.csv`, 'data');
+            const fileContents = await fileRef.read(file => file.split('\n'));
+            if (fileContents instanceof Error)
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: fileContents.message,
+                });
+            return await fileRef.write(
+                fileContents
+                    .map((line, lineIndex) =>
+                        lineIndex === input.index + 1 ? dataRowAsString(input.rowValues) : line,
+                    )
+                    .join('\n'),
+            );
         }),
     deleteRow: procedure
         .input(z.object({ componentName: z.string(), rowNumber: z.number() }))
         .mutation(async ({ input }) => {
             const fileRef = file(`${input.componentName}.csv`, 'data');
             const fileContents = await fileRef.read<string[]>(f => f.split('\n'));
-            if (fileContents === false)
+            if (fileContents instanceof Error)
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Error reading csv',
+                    message: fileContents.message ?? 'Error reading csv',
                 });
             const writeOutcome = await fileRef.write(
                 fileContents.filter((_, index) => index !== input.rowNumber + 1).join('\n'),
@@ -107,77 +132,127 @@ export const router = t.router({
                 });
         }),
     getConfig: procedure.output(configShape).query(({ ctx }) => ctx.config),
-    writeConfig: procedure
-        .input(z.object({ config: configShape }))
-        .mutation(
-            async ({ input }) => await file('config.json').write(JSON.stringify(input.config)),
-        ),
+    setupComponent: procedure
+        .input(z.object({ componentName: z.string(), config: configShape, header: z.string() }))
+        .mutation(async ({ input }) => {
+            await file(path.join(app.getPath('userData'), 'data', `${input.componentName}.csv`));
+            const dataFile = file(`${input.componentName}.csv`, 'data');
+            if (await dataFile.exists())
+                throw new TRPCError({
+                    code: 'CONFLICT',
+                    message: 'Config file already exists. Move or delete the file to proceed.',
+                });
+            await dataFile.write(input.header);
+            await file('config.json').write(JSON.stringify(input.config));
+        }),
     updateConfig: procedure
         .input(z.object({ config: configShape, modifiedType: z.string() }))
         .mutation(async ({ input }) => {
             await file('config.json').write(JSON.stringify(input.config));
-            const dataPath = path.join(
-                app.getPath('userData'),
-                'data',
-                `${input.modifiedType}.csv`,
-            );
-            if (existsSync(dataPath)) {
-                const dataFileRef = await file(`${input.modifiedType}.csv`, 'data');
-                const readData = await dataFileRef.read(file => {
-                    const lines = file.split('\n');
-                    const rows = lines.slice(0, -1).map(line => splitCsvRow(line));
-                    const header = rows[0];
-                    return header ? { header: splitCsvRow(lines[0]), data: rows.slice(1) } : false;
+            if (!file(`${input.modifiedType}.csv`, 'data').exists())
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: `Data file ${input.modifiedType}.csv not found.`,
                 });
-                if (readData === false || readData.header === null) return;
-                const { header, data } = readData;
-
-                const newOrDeletedColumns = input.config.componentTypes[input.modifiedType].reduce<{
-                    new: string[];
-                    remaining: string[];
-                    deleted: string[];
-                }>(
-                    (acc, field) => {
-                        const inHeader = header.includes(field.name);
-                        return {
-                            new: [...acc.new, ...(inHeader ? [] : [field.name])],
-                            remaining: [...acc.remaining, ...(inHeader ? [field.name] : [])],
-                            deleted: acc.deleted.filter(col => col !== field.name),
-                        };
-                    },
-                    { new: [], remaining: [], deleted: header },
+            const dataFileRef = await file(`${input.modifiedType}.csv`, 'data');
+            const readData = await dataFileRef.read(file => {
+                const lines = file.split('\n');
+                const rows = lines.map(line => splitCsvRow(line));
+                const header = rows[0];
+                if (!header)
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'File is malformed, header could not be read.',
+                    });
+                return { header: splitCsvRow(lines[0]), data: rows.slice(1) };
+            });
+            if (readData instanceof Error)
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: readData.message,
+                });
+            if (readData.header === null)
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'File is malformed, header could not be read.',
+                });
+            const { header, data } = readData;
+            const newOrDeletedColumns = input.config.componentTypes[input.modifiedType].reduce<{
+                new: string[];
+                remaining: string[];
+                deleted: string[];
+            }>(
+                (acc, field) => {
+                    const inHeader = header.includes(field.name);
+                    return {
+                        new: [...acc.new, ...(inHeader ? [] : [field.name])],
+                        remaining: [...acc.remaining, ...(inHeader ? [field.name] : [])],
+                        deleted: acc.deleted.filter(col => col !== field.name),
+                    };
+                },
+                { new: [], remaining: [], deleted: header },
+            );
+            const deletedIndexes = newOrDeletedColumns.deleted.reduce<number[]>((acc, colName) => {
+                const index = header?.indexOf(colName);
+                return index === -1 ? acc : [...acc, index];
+            }, []);
+            const rowToString = (acc: string, item: string) =>
+                `${acc}${acc !== '' ? ',' : ''}${item.includes(',') ? `"${item}"` : item}`;
+            const newData = data.reduce<string[]>((acc, line) => {
+                if (line === null) return acc;
+                const newLine = line.reduce<string>(
+                    (lineAcc, item, index) =>
+                        deletedIndexes.includes(index) ? lineAcc : rowToString(lineAcc, item),
+                    '',
                 );
-                const deletedIndexes = newOrDeletedColumns.deleted.reduce<number[]>(
-                    (acc, colName) => {
-                        const index = header?.indexOf(colName);
-                        return index === -1 ? acc : [...acc, index];
-                    },
-                    [],
-                );
-                const rowToString = (acc: string, item: string) =>
-                    `${acc}${acc !== '' ? ',' : ''}${item.includes(',') ? `"${item}"` : item}`;
-                const newData = data.reduce<string[]>((acc, line) => {
-                    if (line === null) return acc;
-                    const newLine = line.reduce<string>(
-                        (lineAcc, item, index) =>
-                            deletedIndexes.includes(index) ? lineAcc : rowToString(lineAcc, item),
-                        '',
-                    );
-                    return [
-                        ...acc,
-                        newLine.concat(Array(newOrDeletedColumns.new.length + 1).join(',')),
-                    ];
-                }, []);
-                const newHeader = header
-                    .concat(newOrDeletedColumns.new)
-                    .reduce((headerAcc, colName) => {
-                        if (newOrDeletedColumns.deleted.includes(colName)) return headerAcc;
-                        return rowToString(headerAcc, colName);
-                    }, '');
-
-                dataFileRef.write([newHeader].concat(newData).join('\n'));
-            }
+                return [
+                    ...acc,
+                    newLine.concat(Array(newOrDeletedColumns.new.length + 1).join(',')),
+                ];
+            }, []);
+            const newHeader = header
+                .concat(newOrDeletedColumns.new)
+                .reduce((headerAcc, colName) => {
+                    if (newOrDeletedColumns.deleted.includes(colName)) return headerAcc;
+                    return rowToString(headerAcc, colName);
+                }, '');
+            return dataFileRef.write([newHeader].concat(newData).join('\n'));
         }),
+    deleteComponent: procedure
+        .input(z.object({ componentName: z.string() }))
+        .mutation(async ({ input, ctx }) => {
+            const deletion = await file(`${input.componentName}.csv`, 'data').destroy();
+            if (!deletion)
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Error deleting data file.',
+                });
+            const write = await file('config.json').write(
+                JSON.stringify({
+                    ...ctx.config,
+                    componentTypes: keys(ctx.config.componentTypes).reduce(
+                        (acc, type) =>
+                            type === input.componentName
+                                ? acc
+                                : { ...acc, [type]: ctx.config.componentTypes[type] },
+                        {},
+                    ),
+                }),
+            );
+            if (!write)
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Error writing new config file.',
+                });
+        }),
+    minimize: procedure.mutation(({ ctx }) => ctx.window.minimize()),
+    toggleMaximize: procedure.mutation(({ ctx }) => {
+        if (ctx.window.isMaximized()) {
+            return ctx.window.unmaximize();
+        }
+        return ctx.window.maximize();
+    }),
+    killApp: procedure.mutation(({ ctx }) => ctx.window.close()),
 });
 
 export type Router = typeof router;

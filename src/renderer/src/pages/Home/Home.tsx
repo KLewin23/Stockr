@@ -1,8 +1,11 @@
-import { TConfig } from 'src/config';
+import { keys } from '@/utils';
 import { trpc } from '@/renderer/main';
+import { TConfig, TValueMap } from '@/config';
+import { TrashIcon } from '@radix-ui/react-icons';
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import {
+    Button,
     Card,
     ContextMenu,
     ContextMenuContent,
@@ -11,6 +14,7 @@ import {
     Table,
     TableBody,
     TableCell,
+    TableEmpty,
     TableHead,
     TableHeader,
     TableRow,
@@ -20,26 +24,29 @@ import {
 } from '@/shadcn';
 
 import NewItem from './NewItem';
-import { keys } from '../../../../utils';
 import { MainContext } from '../../Context';
+import EditItem, { EditedRowProps } from './EditItem';
 
 const Home = (): JSX.Element => {
+    const [editedRow, setEditedRow] = useState<EditedRowProps | null>(null);
     const { config, data, refetchData } = useContext(MainContext);
     const deleteRow = trpc.deleteRow.useMutation({ onSuccess: () => refetchData() });
     const [selectedTab, setSelectedTab] = useState<keyof TConfig['componentTypes'] | undefined>(
         undefined,
     );
-    const memoisedData = useMemo(
-        () => (selectedTab && data[selectedTab] ? data[selectedTab] : []),
-        [data, selectedTab],
-    );
+    const memoisedData = useMemo(() => {
+        if (!selectedTab) return [];
+        const rows = data.get(selectedTab);
+        return rows ?? [];
+    }, [data, selectedTab]);
+
     const table = useReactTable({
         data: memoisedData,
         columns:
             selectedTab && config.componentTypes[selectedTab]
                 ? config.componentTypes[selectedTab].map(f => ({
-                      accessorKey: f.name,
                       header: f.name,
+                      accessorFn: (row: TValueMap) => row.get(f.name),
                   }))
                 : [],
         getCoreRowModel: getCoreRowModel(),
@@ -52,8 +59,9 @@ const Home = (): JSX.Element => {
 
     return (
         <div className={'col py-12 px-10 gap-4 grow'}>
+            <EditItem rowData={editedRow ? editedRow : null} onClose={() => setEditedRow(null)} />
             <div className={'row w-full gap-10'}>
-                <NewItem />
+                <NewItem currentlyViewedType={selectedTab} />
                 <Tabs value={selectedTab} defaultValue={selectedTab} onValueChange={setSelectedTab}>
                     <TabsList>
                         {keys(config.componentTypes).map(typeKey => (
@@ -81,6 +89,7 @@ const Home = (): JSX.Element => {
                                         </TableHead>
                                     );
                                 })}
+                                <TableHead>Actions</TableHead>
                             </TableRow>
                         ))}
                     </TableHeader>
@@ -89,7 +98,18 @@ const Home = (): JSX.Element => {
                             table.getRowModel().rows.map((row, index) => (
                                 <ContextMenu key={row.id}>
                                     <ContextMenuTrigger asChild>
-                                        <TableRow data-state={row.getIsSelected() && 'selected'}>
+                                        <TableRow
+                                            className={'cursor-pointer'}
+                                            onClick={() => {
+                                                if (!selectedTab) return;
+                                                setEditedRow({
+                                                    entry: row.original,
+                                                    type: selectedTab,
+                                                    index,
+                                                });
+                                            }}
+                                            data-state={row.getIsSelected() && 'selected'}
+                                        >
                                             {row.getVisibleCells().map(cell => (
                                                 <TableCell key={cell.id}>
                                                     {flexRender(
@@ -98,6 +118,27 @@ const Home = (): JSX.Element => {
                                                     )}
                                                 </TableCell>
                                             ))}
+                                            <TableCell
+                                                key={`${selectedTab}-${row.id}-actions`}
+                                                className={'w-40 max-h-[53px] py-0'}
+                                                onClick={e => e.stopPropagation()}
+                                            >
+                                                <Button
+                                                    className={
+                                                        'aspect-square bg-red-700 w-8 h-8 p-0 hover:bg-red-800'
+                                                    }
+                                                    onClick={e => {
+                                                        e.stopPropagation();
+                                                        if (!selectedTab) return;
+                                                        deleteRow.mutate({
+                                                            componentName: selectedTab,
+                                                            rowNumber: index,
+                                                        });
+                                                    }}
+                                                >
+                                                    <TrashIcon className={'text-white'} />
+                                                </Button>
+                                            </TableCell>
                                         </TableRow>
                                     </ContextMenuTrigger>
                                     <ContextMenuContent>
@@ -116,18 +157,18 @@ const Home = (): JSX.Element => {
                                 </ContextMenu>
                             ))
                         ) : (
-                            <TableRow>
+                            <TableEmpty>
                                 <TableCell
                                     colSpan={
                                         selectedTab && config.componentTypes[selectedTab]
-                                            ? config.componentTypes[selectedTab].length
+                                            ? config.componentTypes[selectedTab].length + 1
                                             : 0
                                     }
-                                    className="h-24 text-center"
+                                    className="h-32 text-[16px] text-center"
                                 >
                                     No results.
                                 </TableCell>
-                            </TableRow>
+                            </TableEmpty>
                         )}
                     </TableBody>
                 </Table>

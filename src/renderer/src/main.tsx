@@ -13,6 +13,7 @@ import './assets/main.css';
 import { MainContext } from './Context';
 // @ts-ignore Needs to be imported here no matter ts issues
 import { Router } from '../../main/router';
+import { Notification, notify } from './components/shadcn';
 import { ThemeProvider } from './components/shadcn/ThemeProvider';
 
 export const trpc = createTRPCReact<Router>();
@@ -37,21 +38,35 @@ const Main = () => {
         cacheTime: Infinity,
         staleTime: Infinity,
     });
-    const { data, refetch: refetchData } = trpc.readData.useQuery(undefined, {
+    const {
+        data,
+        refetch: refetchData,
+        error: dataError,
+    } = trpc.readData.useQuery(undefined, {
         cacheTime: Infinity,
         staleTime: Infinity,
     });
+
+    React.useEffect(() => {
+        if (dataError) {
+            console.error(dataError)
+            notify.error(
+                'Something went wrong loading datafile, Check your csv files or open an issue on github.',
+            );
+        }
+    }, [dataError]);
 
     return (
         <MainContext.Provider
             value={{
                 config: config ?? { componentTypes: {} },
                 refetchConfig,
-                data: data ?? {},
+                data: data ?? new Map(),
                 refetchData,
             }}
         >
             <ThemeProvider>
+                <Notification />
                 <App />
             </ThemeProvider>
         </MainContext.Provider>

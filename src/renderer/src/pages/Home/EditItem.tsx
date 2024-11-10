@@ -1,7 +1,10 @@
+import { keys } from '@/utils';
+import { match } from 'ts-pattern';
 import { trpc } from '@/renderer/main';
+import { useContext, useEffect } from 'react';
 import { MainContext } from '@/renderer/Context';
-import { useContext, useEffect, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
+import { FieldDef, FieldValue, TConfig, TValueMap, dataRow } from '@/config';
 import {
     Button,
     DatePicker,
@@ -10,7 +13,6 @@ import {
     DialogDescription,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
     Form,
     FormControl,
     FormDescription,
@@ -19,75 +21,104 @@ import {
     FormLabel,
     FormMessage,
     Input,
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
     Tabs,
     TabsList,
     TabsTrigger,
     notify,
 } from '@/shadcn';
 
-import { keys } from '../../../../utils';
-import { FieldDef, FieldValue, TConfig, dataRow } from '../../../../config';
-
 interface FormValues {
     type: keyof TConfig['componentTypes'];
     fields: FieldValue<FieldDef>[];
 }
 
-const NewItem = ({
-    currentlyViewedType,
-}: {
-    currentlyViewedType?: keyof TConfig['componentTypes'];
-}): JSX.Element => {
-    const [isOpen, setIsOpen] = useState(false);
-    const form = useForm<FormValues>({ defaultValues: { type: currentlyViewedType } });
-    const { config, refetchData } = useContext(MainContext);
-    const addItem = trpc.addData.useMutation({
+export interface EditedRowProps {
+    entry: TValueMap;
+    type: keyof TConfig['componentTypes'];
+    index: number;
+}
+
+interface Props {
+    rowData: EditedRowProps | null;
+    onClose: () => void;
+}
+
+const EditItem = ({ rowData, onClose }: Props): JSX.Element => {
+    const form = useForm<FormValues>();
+    const { refetchData, config } = useContext(MainContext);
+    const addItem = trpc.updateData.useMutation({
         onSuccess: () => {
-            notify.success('Item successfully added!');
+            notify.success('Item successfully updated!');
             form.reset({ fields: [], type: undefined });
             refetchData();
-            setIsOpen(false);
+            onClose();
         },
     });
-    const { fields, replace } = useFieldArray<FormValues>({
+    const { fields } = useFieldArray<FormValues>({
         name: 'fields',
         control: form.control,
     });
 
     useEffect(() => {
-        if (currentlyViewedType && config.componentTypes[currentlyViewedType]) {
-            form.setValue('type', currentlyViewedType);
-            replace(config.componentTypes[currentlyViewedType]);
-        }
-    }, [currentlyViewedType]);
+        const componentType = keys(config.componentTypes).find(key => key === rowData?.type);
+        if (!rowData?.entry || !rowData?.type || !componentType) return;
+
+        const nonDefinedFields = config.componentTypes[componentType].reduce<
+            FieldValue<FieldDef>[]
+        >((acc, field) => {
+            return rowData.entry.has(field.name)
+                ? acc
+                : [...acc, { name: field.name, value: undefined, type: field.type }];
+        }, []);
+        form.setValue(
+            'fields',
+            Array.from(rowData?.entry)
+                .map<FieldValue<FieldDef>>(([key, value]) => {
+                    if (value instanceof Date)
+                        return { name: key, value: value as Date, type: 'date' };
+                    if (typeof value === 'string')
+                        return {
+                            name: key,
+                            value: value,
+                            type: 'string',
+                        };
+                    if (typeof value === 'number')
+                        return {
+                            name: key,
+                            value,
+                            type: 'number',
+                        };
+                    return {
+                        name: key,
+                        value,
+                        type: 'boolean',
+                    };
+                })
+                .concat(nonDefinedFields),
+        );
+        form.setValue('type', rowData?.type);
+    }, [rowData?.entry, rowData?.type]);
 
     const type = form.watch('type');
 
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button>Input Stock</Button>
-            </DialogTrigger>
+        <Dialog open={rowData !== null} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Input Stock</DialogTitle>
-                    <DialogDescription>Add a new item and information about it.</DialogDescription>
+                    <DialogTitle>Edit Stock</DialogTitle>
+                    <DialogDescription>Modify items and information about them.</DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                     <form
                         className={'col gap-2'}
                         onSubmit={form.handleSubmit(v => {
+                            if (!rowData) return notify.error('Error opening row.');
                             if (v.fields.some(f => f.value === undefined))
                                 return notify.error('All fields muse be complete.');
                             const parsedFields = dataRow.safeParse(v.fields);
                             if (!parsedFields.success) return notify.error('Something went wrong');
                             return addItem.mutate({
+                                index: rowData.index,
                                 componentName: v.type,
                                 rowValues: parsedFields.data,
                             });
@@ -100,32 +131,7 @@ const NewItem = ({
                                 <FormItem>
                                     <FormLabel>Component Type</FormLabel>
                                     <FormControl>
-                                        <Select
-                                            onValueChange={v => {
-                                                field.onChange(v);
-                                                replace(config.componentTypes[v]);
-                                            }}
-                                            defaultValue={field.value}
-                                        >
-                                            <SelectTrigger className={'w-[250px]'}>
-                                                <SelectValue
-                                                    placeholder={'Select a component type'}
-                                                />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectGroup>
-                                                    {keys(config.componentTypes).map(type => (
-                                                        <SelectItem
-                                                            className={'cursor-pointer'}
-                                                            key={type}
-                                                            value={type}
-                                                        >
-                                                            {type}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectGroup>
-                                            </SelectContent>
-                                        </Select>
+                                        <Input value={field.value} disabled />
                                     </FormControl>
                                     <FormDescription />
                                     <FormMessage />
@@ -225,4 +231,4 @@ const NewItem = ({
     );
 };
 
-export default NewItem;
+export default EditItem;
