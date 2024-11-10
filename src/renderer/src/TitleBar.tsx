@@ -10,7 +10,7 @@ const TitleBar = (): JSX.Element => {
         <div id={'titlebar'} className={'row bg-zinc-900  justify-between'}>
             <div className={'row gap-4 items-center py-2 px-4'}>
                 <img src={'./icon.png'} className={'h-6'} />
-                <p>Billy's Cock Managment System</p>
+                <p>Billy&apos;s Cock Management System</p>
             </div>
             <div className={'row items-center'}>
                 <button
