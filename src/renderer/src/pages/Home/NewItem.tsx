@@ -87,7 +87,11 @@ const NewItem = ({
                             if (!parsedFields.success) return notify.error('Something went wrong');
                             return addItem.mutate({
                                 componentName: v.type,
-                                rowValues: parsedFields.data,
+                                rowValues: parsedFields.data.map(row =>
+                                    row.type === 'boolean' && !row.value
+                                        ? { ...row, value: false }
+                                        : row,
+                                ),
                             });
                         })}
                     >
@@ -171,7 +175,6 @@ const NewItem = ({
                                                     ) : null}
                                                     {innerField.value.type === 'boolean' ? (
                                                         <Tabs
-                                                            defaultValue={'false'}
                                                             value={
                                                                 innerField.value.value === true
                                                                     ? 'true'
