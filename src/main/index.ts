@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
         },
     });
 
-    window.webContents.openDevTools();
+    // window.webContents.openDevTools();
 
     app.on('activate', function () {
         // On macOS it's common to re-create a window in the app when the
