@@ -20,7 +20,7 @@ function createWindow(): BrowserWindow {
             preload: join(__dirname, '../preload/index.js'),
             sandbox: false,
         },
-        titleBarStyle: 'hidden'
+        titleBarStyle: 'hidden',
     });
 
     mainWindow.on('ready-to-show', () => {
@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
         },
     });
 
-    // window.webContents.openDevTools();
+    window.webContents.openDevTools();
 
     app.on('activate', function () {
         // On macOS it's common to re-create a window in the app when the

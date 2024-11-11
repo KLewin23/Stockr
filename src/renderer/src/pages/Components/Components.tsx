@@ -27,33 +27,42 @@ const Components = (): JSX.Element => {
                 {keys(config.componentTypes).length === 0 ? (
                     <p className={'pl-4 text-1 italic'}>Currently no component types exist.</p>
                 ) : null}
-                {keys(config.componentTypes).map(typeKey => (
-                    <Card
-                        key={typeKey}
-                        onClick={() =>
-                            setMode({ name: typeKey, fields: config.componentTypes[typeKey] })
-                        }
-                        className={
-                            'cursor-pointer transition-colors duration-300 hover:bg-border/40'
-                        }
-                    >
-                        <CardHeader>
-                            <CardTitle>{typeKey}</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <ul>
-                                {config.componentTypes[typeKey].map(field => (
-                                    <li
-                                        key={`${typeKey}-${field.name}-${field.type}`}
-                                        className={'list-disc list-inside'}
-                                    >
-                                        {field.name} [{field.type}]
-                                    </li>
-                                ))}
-                            </ul>
-                        </CardContent>
-                    </Card>
-                ))}
+                {keys(config.componentTypes)
+                    .sort(
+                        (a, b) =>
+                            config.componentTypes[a].position - config.componentTypes[b].position,
+                    )
+                    .map(typeKey => (
+                        <Card
+                            key={typeKey}
+                            onClick={() =>
+                                setMode({
+                                    name: typeKey,
+                                    fields: config.componentTypes[typeKey].fields,
+                                    position: config.componentTypes[typeKey].position,
+                                })
+                            }
+                            className={
+                                'cursor-pointer transition-colors duration-300 hover:bg-border/40'
+                            }
+                        >
+                            <CardHeader>
+                                <CardTitle>{typeKey}</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <ul>
+                                    {config.componentTypes[typeKey].fields.map(field => (
+                                        <li
+                                            key={`${typeKey}-${field.name}-${field.type}`}
+                                            className={'list-disc list-inside'}
+                                        >
+                                            {field.name} [{field.type}]
+                                        </li>
+                                    ))}
+                                </ul>
+                            </CardContent>
+                        </Card>
+                    ))}
             </div>
         </div>
     );

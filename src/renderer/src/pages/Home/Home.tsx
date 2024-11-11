@@ -44,7 +44,7 @@ const Home = (): JSX.Element => {
         data: memoisedData,
         columns:
             selectedTab && config.componentTypes[selectedTab]
-                ? config.componentTypes[selectedTab].map(f => ({
+                ? config.componentTypes[selectedTab].fields.map(f => ({
                       header: f.name,
                       accessorFn: (row: TValueMap) => row.get(f.name),
                   }))
@@ -64,16 +64,22 @@ const Home = (): JSX.Element => {
                 <NewItem currentlyViewedType={selectedTab} />
                 <Tabs value={selectedTab} defaultValue={selectedTab} onValueChange={setSelectedTab}>
                     <TabsList>
-                        {keys(config.componentTypes).map(typeKey => (
-                            <TabsTrigger key={typeKey} value={typeKey} className={'min-w-32'}>
-                                {typeKey}
-                            </TabsTrigger>
-                        ))}
+                        {keys(config.componentTypes)
+                            .sort(
+                                (a, b) =>
+                                    config.componentTypes[a].position -
+                                    config.componentTypes[b].position,
+                            )
+                            .map(typeKey => (
+                                <TabsTrigger key={typeKey} value={typeKey} className={'min-w-32'}>
+                                    {typeKey}
+                                </TabsTrigger>
+                            ))}
                     </TabsList>
                 </Tabs>
             </div>
             <Card className={'p-6 grow'}>
-                <Table className={'h-full'}>
+                <Table>
                     <TableHeader>
                         {table.getHeaderGroups().map(headerGroup => (
                             <TableRow key={headerGroup.id}>
@@ -161,7 +167,7 @@ const Home = (): JSX.Element => {
                                 <TableCell
                                     colSpan={
                                         selectedTab && config.componentTypes[selectedTab]
-                                            ? config.componentTypes[selectedTab].length + 1
+                                            ? config.componentTypes[selectedTab].fields.length + 1
                                             : 0
                                     }
                                     className="h-32 text-[16px] text-center"

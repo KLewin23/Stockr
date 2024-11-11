@@ -62,7 +62,7 @@ const EditItem = ({ rowData, onClose }: Props): JSX.Element => {
         const componentType = keys(config.componentTypes).find(key => key === rowData?.type);
         if (!rowData?.entry || !rowData?.type || !componentType) return;
 
-        const nonDefinedFields = config.componentTypes[componentType].reduce<
+        const nonDefinedFields = config.componentTypes[componentType].fields.reduce<
             FieldValue<FieldDef>[]
         >((acc, field) => {
             return rowData.entry.has(field.name)
@@ -112,8 +112,6 @@ const EditItem = ({ rowData, onClose }: Props): JSX.Element => {
                         className={'col gap-2'}
                         onSubmit={form.handleSubmit(v => {
                             if (!rowData) return notify.error('Error opening row.');
-                            if (v.fields.some(f => f.value === undefined))
-                                return notify.error('All fields muse be complete.');
                             const parsedFields = dataRow.safeParse(v.fields);
                             if (!parsedFields.success) return notify.error('Something went wrong');
                             return addItem.mutate({

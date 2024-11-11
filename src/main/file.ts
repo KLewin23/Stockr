@@ -31,6 +31,13 @@ const exists = async (fileName: string) => {
         .catch(() => false);
 };
 
+const rename = async (origionalFilePath: string, newFilePath: string) => {
+    return await promises
+        .rename(origionalFilePath, newFilePath)
+        .then(() => true)
+        .catch(() => false);
+};
+
 const destroy = async (fileName: string) => {
     return await promises
         .rm(fileName)
@@ -52,7 +59,14 @@ export const file = (fileName: string, folder?: string) => {
             read<T>(filePath, validator),
         write: (contents: string) => write(filePath, contents),
         append: (contents: string) => append(filePath, contents),
-        exists:() => exists(filePath),
-        destroy:() => destroy(filePath)
+        exists: () => exists(filePath),
+        rename: (newFileName: string) =>
+            rename(
+                filePath,
+                folder
+                    ? path.join(userData, folder, newFileName)
+                    : path.join(userData, newFileName),
+            ),
+        destroy: () => destroy(filePath),
     };
 };

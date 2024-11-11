@@ -19,6 +19,9 @@ const t = initTRPC.context<Context>().create({ isServer: true });
 
 const { procedure } = t;
 
+const InternalServerError = (message: string) =>
+    new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message });
+
 // TODO make config and filenames lowercase
 
 const dataRowAsString = (row: z.infer<typeof dataRow>) =>
@@ -35,7 +38,7 @@ export const router = t.router({
         const promises = dataFolderContents.map(async fileName => ({
             fileName,
             contents: await file(fileName, 'data').read<TValueMap[]>(file =>
-                parseCsv(file, ctx.config.componentTypes[fileName.slice(0, -4)]),
+                parseCsv(file, ctx.config.componentTypes[fileName.slice(0, -4)].fields),
             ),
         }));
 
@@ -48,17 +51,13 @@ export const router = t.router({
                 );
                 const error = getErrorFromArray([...parsedFiles.values()]);
                 if (error instanceof Error)
-                    throw new TRPCError({
-                        code: 'INTERNAL_SERVER_ERROR',
-                        message: error.message ?? 'Default error when parsing data file.',
-                    });
+                    throw InternalServerError(
+                        error.message ?? 'Default error when parsing data file.',
+                    );
                 return parsedFiles as Map<string, TValueMap[]>;
             })
             .catch(e => {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: e.message ?? 'Error caught parsing data file.',
-                });
+                throw InternalServerError(e.message ?? 'Error caught parsing data file.');
             });
     }),
     addData: procedure
@@ -70,7 +69,6 @@ export const router = t.router({
                 `${input.componentName}.csv`,
             );
             const fileRef = file(`${input.componentName}.csv`, 'data');
-            console.log(input.rowValues);
             const rowAsString = dataRowAsString(input.rowValues);
             if (!existsSync(filePath)) {
                 const headerString = input.rowValues.reduce(
@@ -99,11 +97,7 @@ export const router = t.router({
                 });
             const fileRef = file(`${input.componentName}.csv`, 'data');
             const fileContents = await fileRef.read(file => file.split('\n'));
-            if (fileContents instanceof Error)
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: fileContents.message,
-                });
+            if (fileContents instanceof Error) throw InternalServerError(fileContents.message);
             return await fileRef.write(
                 fileContents
                     .map((line, lineIndex) =>
@@ -118,18 +112,11 @@ export const router = t.router({
             const fileRef = file(`${input.componentName}.csv`, 'data');
             const fileContents = await fileRef.read<string[]>(f => f.split('\n'));
             if (fileContents instanceof Error)
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: fileContents.message ?? 'Error reading csv',
-                });
+                throw InternalServerError(fileContents.message ?? 'Error reading csv');
             const writeOutcome = await fileRef.write(
                 fileContents.filter((_, index) => index !== input.rowNumber + 1).join('\n'),
             );
-            if (writeOutcome === false)
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Error writing data',
-                });
+            if (writeOutcome === false) throw InternalServerError('Error writing data');
         }),
     getConfig: procedure.output(configShape).query(({ ctx }) => ctx.config),
     setupComponent: procedure
@@ -146,38 +133,42 @@ export const router = t.router({
             await file('config.json').write(JSON.stringify(input.config));
         }),
     updateConfig: procedure
-        .input(z.object({ config: configShape, modifiedType: z.string() }))
+        .input(
+            z.intersection(
+                z.object({ config: configShape }),
+                z.union([
+                    z.object({ modifiedTypeName: z.string() }),
+                    z.object({ origionalTypeName: z.string(), newTypeName: z.string() }),
+                ]),
+            ),
+        )
         .mutation(async ({ input }) => {
             await file('config.json').write(JSON.stringify(input.config));
-            if (!file(`${input.modifiedType}.csv`, 'data').exists())
+            const origionalComponentName =
+                'modifiedTypeName' in input ? input.modifiedTypeName : input.origionalTypeName;
+            const newComponentName =
+                'modifiedTypeName' in input ? input.modifiedTypeName : input.newTypeName;
+            if (!file(`${origionalComponentName}.csv`, 'data').exists())
                 throw new TRPCError({
                     code: 'NOT_FOUND',
-                    message: `Data file ${input.modifiedType}.csv not found.`,
+                    message: `Data file ${origionalComponentName}.csv not found.`,
                 });
-            const dataFileRef = await file(`${input.modifiedType}.csv`, 'data');
+            const dataFileRef = await file(`${origionalComponentName}.csv`, 'data');
             const readData = await dataFileRef.read(file => {
                 const lines = file.split('\n');
                 const rows = lines.map(line => splitCsvRow(line));
                 const header = rows[0];
                 if (!header)
-                    throw new TRPCError({
-                        code: 'INTERNAL_SERVER_ERROR',
-                        message: 'File is malformed, header could not be read.',
-                    });
+                    throw InternalServerError('File is malformed, header could not be read.');
                 return { header: splitCsvRow(lines[0]), data: rows.slice(1) };
             });
-            if (readData instanceof Error)
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: readData.message,
-                });
+            if (readData instanceof Error) throw InternalServerError(readData.message);
             if (readData.header === null)
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'File is malformed, header could not be read.',
-                });
+                throw InternalServerError('File is malformed, header could not be read.');
             const { header, data } = readData;
-            const newOrDeletedColumns = input.config.componentTypes[input.modifiedType].reduce<{
+            const newOrDeletedColumns = input.config.componentTypes[
+                newComponentName
+            ].fields.reduce<{
                 new: string[];
                 remaining: string[];
                 deleted: string[];
@@ -216,17 +207,16 @@ export const router = t.router({
                     if (newOrDeletedColumns.deleted.includes(colName)) return headerAcc;
                     return rowToString(headerAcc, colName);
                 }, '');
-            return dataFileRef.write([newHeader].concat(newData).join('\n'));
+            await dataFileRef.write([newHeader].concat(newData).join('\n'));
+            if ('newTypeName' in input) {
+                await dataFileRef.rename(`${input.newTypeName}.csv`);
+            }
         }),
     deleteComponent: procedure
         .input(z.object({ componentName: z.string() }))
         .mutation(async ({ input, ctx }) => {
             const deletion = await file(`${input.componentName}.csv`, 'data').destroy();
-            if (!deletion)
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Error deleting data file.',
-                });
+            if (!deletion) throw InternalServerError('Error deleting data file.');
             const write = await file('config.json').write(
                 JSON.stringify({
                     ...ctx.config,
@@ -239,11 +229,7 @@ export const router = t.router({
                     ),
                 }),
             );
-            if (!write)
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Error writing new config file.',
-                });
+            if (!write) throw InternalServerError('Error writing new config file.');
         }),
     minimize: procedure.mutation(({ ctx }) => ctx.window.minimize()),
     toggleMaximize: procedure.mutation(({ ctx }) => {

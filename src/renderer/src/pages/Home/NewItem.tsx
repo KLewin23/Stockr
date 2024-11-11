@@ -63,7 +63,7 @@ const NewItem = ({
     useEffect(() => {
         if (currentlyViewedType && config.componentTypes[currentlyViewedType]) {
             form.setValue('type', currentlyViewedType);
-            replace(config.componentTypes[currentlyViewedType]);
+            replace(config.componentTypes[currentlyViewedType].fields);
         }
     }, [currentlyViewedType]);
 
@@ -83,8 +83,6 @@ const NewItem = ({
                     <form
                         className={'col gap-2'}
                         onSubmit={form.handleSubmit(v => {
-                            if (v.fields.some(f => f.value === undefined))
-                                return notify.error('All fields muse be complete.');
                             const parsedFields = dataRow.safeParse(v.fields);
                             if (!parsedFields.success) return notify.error('Something went wrong');
                             return addItem.mutate({
@@ -103,7 +101,7 @@ const NewItem = ({
                                         <Select
                                             onValueChange={v => {
                                                 field.onChange(v);
-                                                replace(config.componentTypes[v]);
+                                                replace(config.componentTypes[v].fields);
                                             }}
                                             defaultValue={field.value}
                                         >

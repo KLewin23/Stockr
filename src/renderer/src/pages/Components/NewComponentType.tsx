@@ -24,10 +24,13 @@ const NewComponentType = ({ onComplete }: { onComplete: () => void }): JSX.Eleme
                     config: {
                         componentTypes: {
                             ...config.componentTypes,
-                            [v.componentName]: v.fields.map(field => ({
-                                name: field.fieldName,
-                                type: field.type,
-                            })),
+                            [v.componentName]: {
+                                position: config.componentTypes[v.componentName].position,
+                                fields: v.fields.map(field => ({
+                                    name: field.fieldName,
+                                    type: field.type,
+                                })),
+                            },
                         },
                     },
                     header: v.fields.reduce((acc, field, index) => {

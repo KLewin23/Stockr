@@ -5,9 +5,9 @@ import { ArrElement, getErrorFromArray } from '../utils';
 import { FieldDef, TAcceptedTypes, TValueMap, dataRow } from '../config';
 
 export const renderColumnAsCsv = (row: ArrElement<z.infer<typeof dataRow>>): string => {
-    if ((row.type === 'string' && row.value.includes(',')) || row.type === 'date')
+    if ((row.type === 'string' && row.value?.includes(',')) || row.type === 'date')
         return `"${row.value}"`;
-    return row.value.toString();
+    return row.value?.toString() ?? '';
 };
 
 export const splitCsvRow = (row: string) =>

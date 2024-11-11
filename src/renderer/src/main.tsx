@@ -49,7 +49,7 @@ const Main = () => {
 
     React.useEffect(() => {
         if (dataError) {
-            console.error(dataError)
+            console.error(dataError);
             notify.error(
                 'Something went wrong loading datafile, Check your csv files or open an issue on github.',
             );
@@ -80,4 +80,3 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
         </TRPCWrapper>
     </React.StrictMode>,
 );
-

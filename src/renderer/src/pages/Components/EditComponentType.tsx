@@ -1,3 +1,4 @@
+import { keys } from '@/utils';
 import { notify } from '@/shadcn';
 import { useContext } from 'react';
 import { trpc } from '@/renderer/main';
@@ -38,25 +39,42 @@ const EditComponentType = ({
             mode={'edit'}
             defaultValues={{
                 componentName: component.name,
+                position: component.position.toString(),
                 fields: component.fields.map(field => ({
                     fieldName: field.name,
                     type: field.type,
                 })),
             }}
-            onSubmit={v =>
+            onSubmit={(v, didRename) => {
                 updateConfig.mutate({
                     config: {
                         componentTypes: {
-                            ...config.componentTypes,
-                            [v.componentName]: v.fields.map(field => ({
-                                name: field.fieldName,
-                                type: field.type,
-                            })),
+                            ...(didRename
+                                ? keys(config.componentTypes).reduce(
+                                      (acc, typeName) =>
+                                          typeName === component.name
+                                              ? acc
+                                              : {
+                                                    ...acc,
+                                                    [typeName]: config.componentTypes[typeName],
+                                                },
+                                      {},
+                                  )
+                                : config.componentTypes),
+                            [v.componentName]: {
+                                position: parseInt(v.position, 10),
+                                fields: v.fields.map(field => ({
+                                    name: field.fieldName,
+                                    type: field.type,
+                                })),
+                            },
                         },
                     },
-                    modifiedType: component.name,
-                })
-            }
+                    ...(didRename
+                        ? { origionalTypeName: component.name, newTypeName: v.componentName }
+                        : { modifiedTypeName: component.name }),
+                });
+            }}
             onDelete={() => deleteComponentType.mutate({ componentName: component.name })}
             onCancel={onComplete}
         />

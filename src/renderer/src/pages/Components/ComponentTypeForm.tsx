@@ -40,33 +40,39 @@ interface FormValues {
     fieldName: string;
     type: 'string' | 'number' | 'boolean' | 'date';
     fields: Fields;
+    position: string;
 }
 
 type Mode =
     | {
           mode: 'create';
+          onSubmit: (values: FormValues) => void;
       }
     | {
           mode: 'edit';
           onDelete: () => void;
+          onSubmit: (values: FormValues, didRename: boolean) => void;
       };
 
 const ComponentTypeForm = ({
-    onSubmit,
     onCancel,
     defaultValues,
     ...props
 }: {
-    onSubmit: (values: FormValues) => void;
     onCancel: () => void;
     defaultValues?: {
         componentName: string;
         fields: Fields;
+        position: string;
     };
 } & Mode): JSX.Element => {
     const form = useForm<FormValues>({
         defaultValues: defaultValues
-            ? { componentName: defaultValues.componentName, fields: defaultValues.fields }
+            ? {
+                  componentName: defaultValues.componentName,
+                  position: defaultValues.position,
+                  fields: defaultValues.fields,
+              }
             : { fields: [] },
     });
     const fields = form.watch('fields');
@@ -82,7 +88,11 @@ const ComponentTypeForm = ({
                                 return notify.error('A component type is required.');
                             if (!v.fields || fields.length === 0)
                                 return notify.error('Fields are required.');
-                            return onSubmit(v);
+                            if (props.mode === 'create') return props.onSubmit(v);
+                            return props.onSubmit(
+                                v,
+                                v.componentName !== defaultValues?.componentName,
+                            );
                         })}
                     >
                         <div className={'col max-w-96 py-10  gap-6'}>
@@ -92,12 +102,43 @@ const ComponentTypeForm = ({
                                     <FormField
                                         control={form.control}
                                         name="componentName"
+                                        rules={{
+                                            required: 'A component name is required.',
+                                            validate: v => {
+                                                const rg1 = /^[^\\/:*?"<>|]+$/; // forbidden characters \ / : * ? " < > |
+                                                const rg2 = /^\./; // cannot start with dot (.)
+                                                const rg3 =
+                                                    /^(nul|prn|con|lpt[0-9]|com[0-9])(\.|$)/i; // forbidden file names
+                                                return rg1.test(v) && !rg2.test(v) && !rg3.test(v)
+                                                    ? true
+                                                    : 'Invalid filename';
+                                            },
+                                        }}
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Component Type</FormLabel>
                                                 <FormControl>
                                                     <Input
                                                         placeholder={`Enter a ${field.name}`}
+                                                        {...field}
+                                                    />
+                                                </FormControl>
+                                                <FormDescription />
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="position"
+                                        rules={{ required: 'A position is required.' }}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Position</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        type={'number'}
+                                                        placeholder={`Enter a position.`}
                                                         {...field}
                                                     />
                                                 </FormControl>
